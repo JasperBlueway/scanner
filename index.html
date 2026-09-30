@@ -28,8 +28,12 @@ video{width:100%;height:100%;object-fit:cover;display:block}
 .kader{position:absolute;inset:16%;border:3px solid var(--bw-white);border-radius:14px;box-shadow:0 0 0 999px rgba(0,88,124,.35);pointer-events:none}
 .camfout{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center;color:rgba(255,255,255,.85);background:var(--bw-teal-dark)}
 .camfout #camtekst{color:var(--bw-white)}
-.camcode{font-size:12px;color:rgba(255,255,255,.60)}
-#linkveld{width:100%;font:inherit;font-size:13px;padding:8px 10px;border-radius:var(--bw-radius-sm);border:0;color:var(--bw-text)}
+.starter{margin:6px 16px 24px;background:var(--bw-white);border:1px solid var(--bw-line);border-radius:var(--bw-radius-lg);padding:28px 20px;text-align:center;box-shadow:var(--bw-shadow-sm)}
+.starter-icoon{width:64px;height:64px;margin:0 auto 12px;border-radius:50%;background:var(--bw-blue-soft);color:var(--bw-teal-dark);display:flex;align-items:center;justify-content:center}
+.starter h2{font-size:20px;font-weight:700;color:var(--bw-teal-dark);margin:0 0 8px}
+.starter p{margin:0 auto 18px;max-width:420px}
+.starter .klein{font-size:14px;color:var(--bw-ink-70);margin:14px auto 0}
+button.groot{font-size:17px;padding:14px 32px;width:100%;max-width:320px}
 .resultaat{margin:12px 16px;border-radius:var(--bw-radius);padding:14px 16px;background:var(--bw-white);border:1px solid var(--bw-line);min-height:76px;box-shadow:var(--bw-shadow-sm)}
 .resultaat .kop{font-weight:700;font-size:17px;color:var(--bw-teal-dark)}
 .resultaat .naam{margin-top:3px}
@@ -63,16 +67,23 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
 <div class="topbalk"></div>
 <div id="laden" class="laden">Scanner wordt geladen&hellip;</div>
 <div id="foutblok" class="foutblok" hidden></div>
+<div id="starter" hidden>
+<header><div class="eyebrow">Scanner evenement</div><h1 id="startertitel"></h1><div class="sub" id="startersub"></div></header>
+<div class="starter">
+<div class="starter-icoon" aria-hidden="true"><svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg></div>
+<h2>QR-codes scannen</h2>
+<p id="startertekst">Scan met de camera van je telefoon de QR-code die deelnemers in AFAS Pocket laten zien. Ze worden direct op aanwezig gezet.</p>
+<button class="primair groot" id="openscanner" type="button">Open de scanner</button>
+<p class="klein" id="starterhint">De scanner opent in een nieuw tabblad. Je hoeft niet opnieuw in te loggen.</p>
+</div>
+</div>
 <div id="app" hidden>
 <header><div class="eyebrow">Scanner evenement</div><h1 id="titel"></h1><div class="sub" id="sub"></div></header>
 <div class="proef" id="proef" hidden>Proefmodus: scans worden gecontroleerd, maar nog niet in AFAS op aanwezig gezet.</div>
 <div class="camera"><video id="video" playsinline muted autoplay></video><div class="kader"></div>
 <div class="camfout" id="camfout"><div id="camtekst">De camera kan hier niet worden geopend.</div>
-<button class="primair" id="nieuwvenster" type="button">Open scanner in nieuw venster</button>
-<button id="kopieer" type="button">Kopieer link</button>
-<input id="linkveld" type="text" readonly hidden>
-<button id="opnieuw" type="button">Camera opnieuw proberen</button>
-<div id="camcode" class="camcode"></div></div></div>
+<button class="primair" id="nieuwvenster" type="button">Open de scanner</button>
+<button id="opnieuw" type="button">Camera opnieuw proberen</button></div></div>
 <div class="resultaat" id="resultaat"><div class="kop">Klaar om te scannen</div><div class="naam">Houd de QR-code uit AFAS Pocket in het kader.</div></div>
 <div class="acties"><button type="button" id="zoekknop">Zoek op naam</button><button type="button" id="wissel" hidden>Andere camera</button></div>
 <div class="zoek" id="zoek"><input id="zoekveld" type="search" placeholder="Typ een naam" autocomplete="off"><ul id="zoeklijst"></ul></div>
@@ -122,7 +133,7 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
 
   post('/csu-scan/start', {}).then(function (D) {
     if (!D || D.status !== 'ok') { if (D && D.sessieVerlopen) vergeet(); fatale((D && D.melding) || 'De scanner kon niet worden gestart.'); return; }
-    el('laden').hidden = true; el('app').hidden = false;
+    el('laden').hidden = true;
     start(D);
   }).catch(function () { fatale('Geen verbinding met de server. Probeer het opnieuw.'); });
 
@@ -139,6 +150,26 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
     try { inKader = window.self !== window.top; } catch (e) { inKader = true; }
     var afgeschermd = String(window.origin) === 'null';
     var link = location.origin + location.pathname + '#s=' + encodeURIComponent(token);
+
+    // In het InSite-kader werkt de camera niet (InSite geeft het kader geen cameratoestemming,
+    // en een nieuw venster openen mag alleen na een tik). Toon daarom alleen een startknop.
+    if (inKader) {
+      el('startertitel').textContent = D.titel;
+      el('startersub').textContent = 'Ingelogd als ' + D.scanner;
+      el('starter').hidden = false;
+      el('openscanner').onclick = function () {
+        var w = window.open(link, '_blank');
+        if (w) {
+          el('startertekst').textContent = 'De scanner is geopend in een nieuw tabblad. Ga naar dat tabblad om te scannen.';
+          el('openscanner').textContent = 'Scanner opnieuw openen';
+          el('starterhint').textContent = 'Tabblad gesloten? Tik nog een keer op de knop.';
+        } else {
+          el('starterhint').textContent = 'Het nieuwe tabblad werd geblokkeerd. Sta pop-ups voor deze pagina toe en tik nog een keer.';
+        }
+      };
+      return;
+    }
+    el('app').hidden = false;
 
     function tijd() { var d = new Date(); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
     function toon(soort, kop, naam) {
@@ -184,7 +215,7 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
         toon('let', r.melding, naam); logRegel('let', (naam ? naam + ': ' : '') + r.melding); tril([60, 60, 60]);
       } else {
         toon('fout', r.melding || 'Niet gelukt.', naam); logRegel('fout', (naam ? naam + ': ' : '') + (r.melding || 'Niet gelukt')); tril(250);
-        if (r.sessieVerlopen) { vergeet(); gestopt = true; stop(); camFout(r.melding, false); }
+        if (r.sessieVerlopen) { vergeet(); gestopt = true; stop(); camFout(r.melding); }
       }
       bezig = false; pauzeTot = Date.now() + 1500;
     }
@@ -219,19 +250,18 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
       if (c && c.data) gevonden(c.data);
     }
 
-    function camFout(tekst, knoppen, code) {
+    // knoppen: welke knoppen te tonen ('opnieuw', 'venster', of geen).
+    function camFout(tekst, knoppen) {
       el('camtekst').textContent = tekst;
-      el('nieuwvenster').hidden = knoppen === false;
-      el('kopieer').hidden = knoppen === false;
-      el('opnieuw').hidden = knoppen === false;
-      el('camcode').textContent = code ? 'Reden: ' + code + ' · kader: ' + (inKader ? 'ja' : 'nee') + ' · afgeschermd: ' + (afgeschermd ? 'ja' : 'nee') : '';
+      el('nieuwvenster').hidden = knoppen !== 'venster';
+      el('opnieuw').hidden = knoppen !== 'opnieuw';
       el('camfout').style.display = 'flex';
     }
     function stop() { if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; } }
     function startCamera() {
       if (gestopt) return;
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        camFout('Deze browser geeft hier geen toegang tot de camera. Open de scanner in een nieuw venster.'); return;
+        camFout('Deze browser geeft geen toegang tot de camera. Open de scanner in een andere browser, bijvoorbeeld Chrome of Safari.'); return;
       }
       stop();
       var v = camIndex >= 0 && cams[camIndex] ? { deviceId: { exact: cams[camIndex].deviceId } } : { facingMode: { ideal: 'environment' } };
@@ -246,31 +276,18 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
       }).catch(function (e) {
         var n = (e && e.name) || 'onbekend';
         var geweigerd = n === 'NotAllowedError' || n === 'SecurityError';
-        if (geweigerd && (inKader || afgeschermd)) {
-          // InSite toont de pagina in een kader zonder cameratoestemming; toestemming geven kan hier niet.
-          camFout('InSite staat de camera op deze pagina niet toe. Open de scanner in een nieuw venster; je blijft ingelogd.', true, n);
-          el('opnieuw').hidden = true;
+        if (geweigerd && afgeschermd) {
+          // Afgeschermde weergave (bijv. geopend vanuit een ander kader): opnieuw openen in een eigen tabblad.
+          camFout('De camera kan in deze weergave niet worden gebruikt. Open de scanner opnieuw.', 'venster');
           return;
         }
         camFout(geweigerd
-          ? 'Geen toegang tot de camera. Geef de browser toestemming voor de camera (slotje in de adresbalk) en probeer het opnieuw.'
-          : n === 'NotFoundError' ? 'Geen camera gevonden op dit apparaat.' : 'De camera kon niet worden gestart.', true, n);
-        el('nieuwvenster').hidden = true;
-        el('kopieer').hidden = true;
+          ? 'De scanner heeft toegang tot je camera nodig. Sta de camera toe (via het slotje naast het adres) en tik op Camera opnieuw proberen.'
+          : n === 'NotFoundError' ? 'Er is geen camera gevonden op dit apparaat.' : 'De camera kon niet worden gestart. Sluit andere apps die de camera gebruiken en probeer het opnieuw.', 'opnieuw');
       });
     }
 
-    el('nieuwvenster').onclick = function () { window.open(link, '_blank', 'noopener'); };
-    el('kopieer').onclick = function () {
-      var veld = el('linkveld');
-      veld.value = link; veld.hidden = false; veld.focus(); veld.select();
-      var klaar = function () { el('kopieer').textContent = 'Link gekopieerd'; };
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(link).then(klaar, function () { try { if (document.execCommand('copy')) klaar(); } catch (x) {} });
-        } else if (document.execCommand('copy')) { klaar(); }
-      } catch (x) {}
-    };
+    el('nieuwvenster').onclick = function () { window.open(link, '_blank'); };
     el('opnieuw').onclick = startCamera;
     el('wissel').onclick = function () { if (cams.length) { camIndex = (camIndex + 1) % cams.length; startCamera(); } };
 
@@ -309,17 +326,9 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
         }).catch(function () {});
       } catch (e) {}
     }
-    document.addEventListener('visibilitychange', function () { if (inKader) return; if (document.hidden) stop(); else startCamera(); });
+    document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else startCamera(); });
     teller();
-    if (inKader) {
-      // InSite laadt deze pagina in een kader zonder cameratoestemming: meteen de knop tonen.
-      el('nieuwvenster').textContent = 'Scanner openen';
-      camFout('Open de scanner in een eigen venster. Daar werkt de camera; je blijft ingelogd.', true);
-      el('opnieuw').hidden = true;
-      el('kopieer').hidden = true;
-    } else {
-      startCamera();
-    }
+    startCamera();
     lus();
   }
 })();
