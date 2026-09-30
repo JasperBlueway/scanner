@@ -90,16 +90,21 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
 
   function el(id) { return document.getElementById(id); }
 
-  // Sessietoken uit de link halen en uit de adresbalk verwijderen; voor herladen in sessionStorage.
+  // Sessietoken uit de link halen en uit de adresbalk verwijderen. Het toestel onthoudt de
+  // sessie (localStorage), zodat deze pagina daarna direct werkt tot de sessie in n8n verloopt.
+  var SLEUTEL = 'csuScanToken';
+  function bewaar(t) { try { localStorage.setItem(SLEUTEL, t); } catch (e) { try { sessionStorage.setItem(SLEUTEL, t); } catch (x) {} } }
+  function vergeet() { try { localStorage.removeItem(SLEUTEL); } catch (e) {} try { sessionStorage.removeItem(SLEUTEL); } catch (e) {} }
+  function lees() { try { return localStorage.getItem(SLEUTEL) || sessionStorage.getItem(SLEUTEL) || ''; } catch (e) { return ''; } }
   var token = '';
   try {
     var h = new URLSearchParams(location.hash.slice(1)).get('s') || '';
     if (/^[0-9a-f]{48}$/i.test(h)) {
       token = h.toLowerCase();
-      try { sessionStorage.setItem('csuScanToken', token); } catch (e) {}
+      bewaar(token);
       history.replaceState(null, '', location.pathname + location.search);
     } else {
-      try { token = sessionStorage.getItem('csuScanToken') || ''; } catch (e) {}
+      token = lees();
     }
   } catch (e) {}
 
@@ -107,7 +112,7 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
     el('laden').hidden = true; el('app').hidden = true;
     el('foutblok').hidden = false; el('foutblok').textContent = melding;
   }
-  if (!token) { fatale('Geen scansessie gevonden. Open de scanner vanuit AFAS InSite.'); return; }
+  if (!token) { fatale('Geen scansessie gevonden. Open de scanner eenmalig vanuit AFAS InSite; daarna werkt deze pagina op dit toestel direct, tot het einde van de sessie.'); return; }
 
   function post(pad, body) {
     body.token = token;
@@ -116,7 +121,7 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
   }
 
   post('/csu-scan/start', {}).then(function (D) {
-    if (!D || D.status !== 'ok') { fatale((D && D.melding) || 'De scanner kon niet worden gestart.'); return; }
+    if (!D || D.status !== 'ok') { if (D && D.sessieVerlopen) vergeet(); fatale((D && D.melding) || 'De scanner kon niet worden gestart.'); return; }
     el('laden').hidden = true; el('app').hidden = false;
     start(D);
   }).catch(function () { fatale('Geen verbinding met de server. Probeer het opnieuw.'); });
@@ -179,7 +184,7 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
         toon('let', r.melding, naam); logRegel('let', (naam ? naam + ': ' : '') + r.melding); tril([60, 60, 60]);
       } else {
         toon('fout', r.melding || 'Niet gelukt.', naam); logRegel('fout', (naam ? naam + ': ' : '') + (r.melding || 'Niet gelukt')); tril(250);
-        if (r.sessieVerlopen) { gestopt = true; stop(); camFout(r.melding, false); }
+        if (r.sessieVerlopen) { vergeet(); gestopt = true; stop(); camFout(r.melding, false); }
       }
       bezig = false; pauzeTot = Date.now() + 1500;
     }
@@ -304,9 +309,17 @@ button.primair:hover{background:var(--bw-orange-hover);border-color:var(--bw-ora
         }).catch(function () {});
       } catch (e) {}
     }
-    document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else startCamera(); });
+    document.addEventListener('visibilitychange', function () { if (inKader) return; if (document.hidden) stop(); else startCamera(); });
     teller();
-    startCamera();
+    if (inKader) {
+      // InSite laadt deze pagina in een kader zonder cameratoestemming: meteen de knop tonen.
+      el('nieuwvenster').textContent = 'Scanner openen';
+      camFout('Open de scanner in een eigen venster. Daar werkt de camera; je blijft ingelogd.', true);
+      el('opnieuw').hidden = true;
+      el('kopieer').hidden = true;
+    } else {
+      startCamera();
+    }
     lus();
   }
 })();
